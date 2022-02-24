@@ -13,3 +13,6 @@ find . -type f -exec sed -i 's/\/work\/awilf/\/work\/qianlim\/mtag/g' {} +
 # Remove cached items
 du -sm ~/.cache/*
 rm -rf ~/.cache/*
+
+# alias
+alias ssh-matrix='ssh qianlim@matrix.ml.cmu.edu'
