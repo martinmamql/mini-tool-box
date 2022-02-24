@@ -9,3 +9,7 @@ for i in */; do zip -r "${i%/}.zip" "$i"; done
 # Replace strings in all files in a folder:
 # https://linuxize.com/post/how-to-find-files-in-linux-using-the-command-line/
 find . -type f -exec sed -i 's/\/work\/awilf/\/work\/qianlim\/mtag/g' {} +
+
+# Remove cached items
+du -sm ~/.cache/*
+rm -rf ~/.cache/*
