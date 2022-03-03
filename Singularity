@@ -1,3 +1,5 @@
+# https://gist.github.com/vsoch/49709c8ed549155d0a15bde48e893588
+# To build, run sudo singularity bootstrap pyg.img Singularity
 Bootstrap: docker
 From: ubuntu:18.04
 
