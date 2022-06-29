@@ -18,4 +18,4 @@ rm -rf ~/.cache/*
 alias ssh-matrix='ssh qianlim@matrix.ml.cmu.edu'
 
 # get time
-date +%s
+a=$(date +%s)
