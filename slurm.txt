@@ -1,0 +1,2 @@
+# Check resources across nodes
+sinfo -o "%20N  %10c  %10m  %25f  %10G " | sort
