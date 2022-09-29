@@ -19,3 +19,5 @@ alias ssh-matrix='ssh qianlim@matrix.ml.cmu.edu'
 
 # get time
 a=$(date +%s)
+
+grep -r . -e "Dev Acc: 0.68"
