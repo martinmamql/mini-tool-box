@@ -1,5 +1,5 @@
 # ssh without password
-# Optional
+# Optional if already existed
 ssh-keygen -t rsa
 ssh b@B mkdir -p .ssh
 
