@@ -1,2 +1,6 @@
 # print
-jax.debug.print("{sigmasq_z}", sigmasq_z = sigmasq_z)
+jax.debug.print("{}", value)
+
+# create random array
+from jax import random
+a = random.normal(random.PRNGKey(1), shape=(5, 5))
