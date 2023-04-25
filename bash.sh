@@ -27,3 +27,5 @@ grep -r . -e "Dev Acc: 0.68"
 until my_cmd | grep -q "String Im Looking For"; do : ; done
 # Loop until some string is no longer present (e.g., failed)
 until my_cmd | grep -q -L "String Im Looking For"; do : ; done
+# Specific example
+until gcloud compute tpus tpu-vm create v3-1 --zone europe-west4-a --accelerator-type v3-8 --version tpu-vm-v4-base | grep -q -L "ERROR"; do : ; sleep 30s; done
