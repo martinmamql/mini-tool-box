@@ -24,4 +24,6 @@ grep -r . -e "Dev Acc: 0.68"
 
 # Loop until some string is present in stdout
 # https://superuser.com/questions/375223/watch-the-output-of-a-command-until-a-particular-string-is-observed-and-then-e
-until my_cmd | grep -m 1 "String Im Looking For"; do : ; done
+until my_cmd | grep -q "String Im Looking For"; do : ; done
+# Loop until some string is no longer present (e.g., failed)
+until my_cmd | grep -q -L "String Im Looking For"; do : ; done
