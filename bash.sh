@@ -29,3 +29,11 @@ until my_cmd | grep -q "String Im Looking For"; do : ; done
 until my_cmd | grep -q -L "String Im Looking For"; do : ; done
 # Specific example
 until gcloud compute tpus tpu-vm create v3-1 --zone europe-west4-a --accelerator-type v3-8 --version tpu-vm-v4-base | grep -q -L "ERROR"; do : ; sleep 30s; done
+
+# Download from Google drive using wget; replace FILEID and FILENAME
+# Small file (<= 100 Mb):
+wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=FILEID' -O FILENAME
+
+# Large file (> 100 Mb):
+wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=FILEID' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=FILEID" -O FILENAME && rm -rf /tmp/cookies.txt
+
