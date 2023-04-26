@@ -31,6 +31,7 @@ until my_cmd | grep -q -L "String Im Looking For"; do : ; done
 until gcloud compute tpus tpu-vm create v3-1 --zone europe-west4-a --accelerator-type v3-8 --version tpu-vm-v4-base | grep -q -L "ERROR"; do : ; sleep 30s; done
 
 # Download from Google drive using wget; replace FILEID and FILENAME
+# https://chemicloud.com/kb/article/download-google-drive-files-using-wget/
 # Small file (<= 100 Mb):
 wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=FILEID' -O FILENAME
 
