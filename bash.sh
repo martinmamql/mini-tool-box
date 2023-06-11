@@ -22,6 +22,9 @@ a=$(date +%s)
 
 grep -r . -e "Dev Acc: 0.68"
 
+# Ignore lines with patterns
+grep -v "pattern" myfile.txt > tmpfile
+
 # Loop until some string is present in stdout
 # https://superuser.com/questions/375223/watch-the-output-of-a-command-until-a-particular-string-is-observed-and-then-e
 until my_cmd | grep -q "String Im Looking For"; do : ; done
