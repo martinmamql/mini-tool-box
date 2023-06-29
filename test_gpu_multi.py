@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
-from datautils import MyTrainDataset
 
 import torch.multiprocessing as mp
 from torch.utils.data.distributed import DistributedSampler
@@ -9,6 +8,16 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 import os
 
+class MyTrainDataset(Dataset):
+    def __init__(self, size):
+        self.size = size
+        self.data = [(torch.rand(20), torch.rand(1)) for _ in range(size)]
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, index):
+        return self.data[index]
 
 def ddp_setup(rank, world_size):
     """
@@ -96,6 +105,6 @@ if __name__ == "__main__":
     total_epochs = 20
     save_every = 5
     batch_size = 32
-    
+
     world_size = torch.cuda.device_count()
     mp.spawn(main, args=(world_size, save_every, total_epochs, batch_size), nprocs=world_size)
