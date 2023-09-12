@@ -1,119 +1,147 @@
+import argparse
+import json
 import shlex
+import string
 import subprocess
-import tempfile
-from io import StringIO
+from pathlib import Path
+from typing import Any, Dict, List
 
-import pandas as pd
+FIELDS = ("GPUs", "CPUs", "Memory")
 
 
-def run(command_str: str) -> tuple[int, str, str]:
+def run(command_str: str) -> str:
     """Execute a shell command."""
     command = shlex.split(command_str)
 
-    # use tempfile to overcome the buffer limit
-    stdout = tempfile.TemporaryFile(buffering=0)
-    stderr = tempfile.TemporaryFile(buffering=0)
-
-    process = subprocess.Popen(
-        command, stdout=stdout, stderr=stderr, stdin=subprocess.DEVNULL
+    stdout = subprocess.check_output(
+        command, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL
     )
-    process.wait()
 
-    stdout.seek(0)
-    out = "".join([line.decode() for line in stdout.readlines()])
-
-    stderr.seek(0)
-    err = "".join([line.decode() for line in stderr.readlines()])
-
-    return process.returncode, out, err
+    return stdout.decode()
 
 
-def get_resources() -> pd.DataFrame:
-    """Return a dataframe containing the resources per node."""
+def get_resources() -> List[Dict[str, Any]]:
+    """Return a list of dicts containing the resources per node."""
     # query sinfo
-    returncode, stdout, stderr = run(
-        'sinfo -o "%20N | %.5a | %8c | %10m | %50G  | %t" -N'
+    stdout = run(
+        'sinfo -o \'{"node": "%N", "CPUs": %c, "Memory": %m, "GPUs": "%G", "state": "%t", "parition": "%P"}\' -N --noheader'
     )
-    assert returncode == 0, stderr
+    nodes = [json.loads(line) for line in stdout.strip("\n").split("\n")]
+    nodes = sorted(nodes, key=lambda node: node["node"])
+    # extract partitions
+    partitions = {}
+    for node in nodes:
+        name = node["node"]
+        if name not in partitions:
+            partitions[name] = []
+        parition = node["parition"]
+        partitions[name].append(parition)
+        del node["parition"]
+    # remove duplicate lines
+    nodes = [
+        node
+        for inode, node in enumerate(nodes)
+        if node["node"] not in [_node["node"] for _node in nodes[:inode]]
+    ]
+    # remove offline/dead nodes
+    offline = [
+        node["node"] for node in nodes if node.pop("state").startswith(("d", "fail"))
+    ]
+    if offline:
+        print("down/drain/fail:", offline)
+        print()
+    nodes = [node for node in nodes if node["node"] not in offline]
+    # parse GPU type
+    for node in nodes:
+        node["GPU Type"] = []
+    for line in Path("/etc/slurm/gres.conf").read_text().split("\n"):
+        if line.startswith("#") or "gpu Type=" not in line:
+            continue
+        name = line.split("NodeName=", 1)[1].split(" ", 1)[0]
+        gpu = line.split("gpu Type=", 1)[1].split(" ", 1)[0]
+        for node in nodes:
+            if node["node"] == name:
+                node["GPU Type"].append(gpu)
+                break
 
-    # convet to dataframe
-    data = pd.read_csv(StringIO(stdout), sep="|", skipinitialspace=True)
+    # convert units
+    for node in nodes:
+        node["Memory"] /= 1024
+        node["GPUs"] = _parse_gpu(node["GPUs"])
+        node["Partitions"] = ", ".join(sorted(partitions[node["node"]]))
+        node["GPU Type"] = ",".join(node["GPU Type"])
+        node["weight"] = -1
 
-    # convert to strings
-    data.columns = data.columns.str.strip()
-    for name in ("NODELIST", "AVAIL", "GRES", "STATE"):
-        data[name] = data[name].astype(str).str.strip()
+    # sort by node priority
+    for line in Path("/etc/slurm/local_nodenames.conf").read_text().split("\n"):
+        if line.startswith("#") or "Weight=" not in line:
+            continue
+        name = line.split("NodeName=", 1)[1].split(" ", 1)[0]
+        weight = line.split("Weight=", 1)[1].split(" ", 1)[0]
+        for node in nodes:
+            if node["node"] == name:
+                node["weight"] = int(weight)
+                break
+    nodes = sorted(nodes, key=lambda node: node["weight"])
+    return nodes
 
-    # remove nodes that are not available
-    index = (
-        (data["AVAIL"] == "up")
-        & ~data["STATE"].str.startswith("down")
-        & ~data["STATE"].str.startswith("drain")
+
+def _parse_gpu(gpu: str) -> int:
+    if ":" not in gpu:
+        return 0
+    return sum([int(x.split(":")[-1]) for x in gpu.split(",")])
+
+
+def get_usage(min_memory: float) -> Dict[str, int]:
+    """Return a dict containing the used resources per node."""
+    # query squeue
+    stdout = run(
+        'squeue --format=\'{"node": "%N", "GPUs": "%b", "Memory": "%m", "CPUs": %c}\' --noheader --states=running --noconvert'
     )
-    print("Not-up nodes")
-    print(data.loc[~index, ["NODELIST", "GRES", "STATE"]].groupby("NODELIST").first())
-    print()
-    data = data.loc[index, :]
+    jobs = [json.loads(line) for line in stdout.strip("\n").split("\n")]
 
-    # count nodes that are in multiple partitions only one time
-    data = data.drop_duplicates(subset=("NODELIST"))
-
-    # parse GPUs
-    data.loc[data["GRES"] == "(null)", "GRES"] = "0"
-    data["GRES"] = (
-        data["GRES"]
-        .astype(str)
-        .apply(lambda xs: sum([int(x.split(":")[-1]) for x in xs.split(",")]))
-    )
-
-    return data.set_index("NODELIST").drop(columns=["AVAIL", "STATE"])
+    # convert units and aggregate
+    usage = {}
+    for job in sorted(jobs, key=lambda x: x["node"]):
+        job["Memory"] = int(job["Memory"].strip("M")) / 1024
+        if job["Memory"] == 0.0:  # min of the max memory per node
+            job["Memory"] = min_memory
+        job["GPUs"] = _parse_gpu(job["GPUs"])
+        if job["node"] not in usage:
+            usage[job["node"]] = {field: job[field] for field in FIELDS}
+            continue
+        for field in FIELDS:
+            usage[job["node"]][field] += job[field]
+    return usage
 
 
-def get_usage() -> pd.DataFrame:
-    """Return a dataframe containing the used resources per node."""
-    # query sacct
-    returncode, stdout, stderr = run(
-        'sacct -P -sr -a --format="Jobid,NodeList,AllocCPUS,AllocGRES,ReqMem" --units=M'
-    )
-    assert returncode == 0, stderr
-
-    # convert to dataframe
-    data = pd.read_csv(StringIO(stdout), sep="|", dtype=str).fillna(0)
-    data.columns = (
-        data.columns.str.upper()
-        .str.replace("ALLOC", "")
-        .str.replace("REQMEM", "MEMORY")
-    )
-
-    # remove lost jobs
-    stdout = run("sacctmgr show runaway")[1]
-    lost_jobs = [line.split(" ", 1)[0] for line in stdout.split("-\n")[-1].split("\n")]
-    lost_jobs = [x for x in lost_jobs if x.strip()]
-    data = data.loc[~data["JOBID"].isin(lost_jobs)]
-
-    # remove job steps
-    data = data.loc[~data["JOBID"].apply(lambda x: "." in x)].drop(columns=["JOBID"])
-
-    # parse GPUs
-    data["GRES"] = (
-        data["GRES"]
-        .astype(str)
-        .apply(lambda x: x.split(":", 1)[1] if ":" in x else "0")
-        .astype(int)
-    )
-
-    # parse memory
-    data["MEMORY"] = data["MEMORY"].apply(lambda x: int(x[:-2]))
-    data["CPUS"] = data["CPUS"].astype(int)
-    return data.groupby("NODELIST").sum()
+def print_stats(nodes: List[Dict[str, Any]]) -> None:
+    header = {key: key for key in (*FIELDS, "node", "GPU Type", "Partitions")}
+    for node in [header] + nodes:
+        print(
+            f"{node['node']:<12}{node['GPUs']:>8}{node['CPUs']:>8}{node['Memory']:>8}{node['GPU Type']:>15}{node['Partitions']:>22}"
+        )
 
 
 if __name__ == "__main__":
-    resources = get_resources()
-    print("Existing number of GPUs:", resources["GRES"].sum())
+    nodes = get_resources()
+    used = get_usage(min(node["Memory"] for node in nodes))
 
-    used = get_usage()
-    print("Number of used GPUs:", used["GRES"].sum())
+    print("Free resources")
+    free = []
+    for node in nodes:
+        name = node["node"]
+        used_node = {
+            field: used[name][field] if node["node"] in used else 0 for field in FIELDS
+        }
 
-    print("Available resources per node:")
-    print(resources.subtract(used, fill_value=0).astype(int))
+        free.append(
+            {
+                **{field: node[field] for field in ("node", "Partitions", "GPU Type")},
+                **{
+                    field: max(round(node[field] - used_node[field]), 0)
+                    for field in FIELDS
+                },
+            }
+        )
+    print_stats(free)
