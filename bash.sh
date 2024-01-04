@@ -44,4 +44,5 @@ wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download
 # Find files matching multiple KEYWORD within all /home/$user folders
 cut -d: -f1 /etc/passwd $1 | while read x; do grep -rns /home/$x /work/$x /results/$x /projects/dataset_processed/$x -e "MOSEAS_STATUS" -e "MOSEAS_MTURK" -e "MOSEAS" -e "Multiligual_MOSEI" -e "Multling_MOSEI" >> ~/MOSEAS_find_all_users.txt 2>&1; done
 
-
+# Show available GPUs
+sinfo -o "%40N  %20c  %10m  %35f  %20G %T" -p russ_reserved
