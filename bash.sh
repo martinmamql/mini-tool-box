@@ -22,6 +22,8 @@ a=$(date +%s)
 
 grep -r . -e "Dev Acc: 0.68"
 
+grep -r . -e "'ccc': 0.5.*mosei_happiness" -e "mosei_happiness.*'ccc': 0.5"
+
 # Ignore lines with patterns
 grep -v "pattern" myfile.txt > tmpfile
 
