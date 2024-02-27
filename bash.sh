@@ -22,7 +22,7 @@ a=$(date +%s)
 
 grep -r . -e "Dev Acc: 0.68"
 
-grep -r . -e "'ccc': 0.5.*mosei_happiness" -e "mosei_happiness.*'ccc': 0.5"
+grep -rl "'corr': 0.7" --include='*.csv' . | xargs grep -l 'mosi_sentiment'
 
 # Ignore lines with patterns
 grep -v "pattern" myfile.txt > tmpfile
